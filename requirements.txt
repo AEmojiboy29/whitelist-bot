@@ -1,3 +1,11 @@
+# Core Dependencies
 discord.py==2.3.2
 python-dotenv==1.0.0
 Flask==3.0.0
+
+# Optional (for better performance)
+aiohttp==3.9.3
+asyncio==3.4.3
+
+# Render specific
+gunicorn==21.2.0  # Web server for Flask
