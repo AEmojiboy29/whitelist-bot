@@ -1033,14 +1033,14 @@ async def commands_slash(interaction: discord.Interaction):
     
     # Create base embed
     embed = discord.Embed(
-        title="🤖 Bot Commands",
-        description="Here are all available commands based on your permissions:",
+        title="Bot Commands",
+        description="Here are all available commands:",
         color=discord.Color.blue()
     )
     
     # ===== PUBLIC COMMANDS (Everyone can see) =====
     public_commands = ""
-    public_commands += "**🎮 Public Commands:**\n"
+    public_commands += "**Public Commands:**\n"
     public_commands += "• `/s`, `.s` - View most recent deleted message\n"
     public_commands += "• `/s1`, `.s1` - View 1st most recent deleted message\n"
     public_commands += "• `/s2`, `.s2` - View 2nd most recent deleted message\n"
@@ -1050,12 +1050,12 @@ async def commands_slash(interaction: discord.Interaction):
     public_commands += "• `/commands`, `.commands` - Show this help menu\n"
     public_commands += "• `.status` - Check bot status\n\n"
     
-    embed.add_field(name="✅ Available to Everyone", value=public_commands, inline=False)
+    embed.add_field(name="Available Commands", value=public_commands, inline=False)
     
     # ===== ADMINISTRATOR COMMANDS =====
     if has_admin:
         admin_commands = ""
-        admin_commands += "**🔒 Administrator Commands:**\n"
+        admin_commands += "**Administrator Commands:**\n"
         admin_commands += "• `/warn`, `.warn @user [reason]` - Warn a user\n"
         admin_commands += "• `/kick`, `.kick @user [reason]` - Kick a user\n"
         admin_commands += "• `/ban`, `.ban @user [reason] [days]` - Ban a user\n"
@@ -1063,35 +1063,16 @@ async def commands_slash(interaction: discord.Interaction):
         admin_commands += "• `/clearwarns`, `.clearwarns @user` - Clear user warnings\n"
         admin_commands += "• `/cs`, `.cs` - Clear all sniped messages in channel\n\n"
         
-        embed.add_field(name="👑 Your Administrator Commands", value=admin_commands, inline=False)
-        
-        # Permission status
-        permission_status = "✅ **You have Administrator permission**\n"
-        permission_status += "You can use all moderation commands"
-    else:
-        locked_commands = ""
-        locked_commands += "**🔒 Administrator Commands:** *(Locked)*\n"
-        locked_commands += "You need **Administrator** permission to use these commands:\n"
-        locked_commands += "• Warn, Kick, Ban users\n"
-        locked_commands += "• View/Clear warnings\n"
-        locked_commands += "• Clear snipe storage\n"
-        
-        embed.add_field(name="🔐 Locked Commands", value=locked_commands, inline=False)
-        
-        # Permission status
-        permission_status = "⚠️ **You do not have Administrator permission**\n"
-        permission_status += "You can only use public commands"
-    
-    embed.add_field(name="🔑 Your Permission Status", value=permission_status, inline=False)
+        embed.add_field(name="Admin Commands", value=admin_commands, inline=False)
     
     # Footer with user info
-    embed.set_footer(text=f"Requested by {interaction.user.name} • User ID: {interaction.user.id}")
+    embed.set_footer(text=f"Requested by {interaction.user.name}")
     embed.timestamp = datetime.utcnow()
     
     # Send the embed
     await interaction.response.send_message(embed=embed, ephemeral=True)
-    
-@bot.command(name='commands', aliases=['cmds'])  # REMOVED 'help' from aliases
+
+@bot.command(name='commands', aliases=['cmds'])
 async def commands_prefix(ctx):
     """Show all available commands based on your permissions"""
     # Check user permissions
@@ -1099,19 +1080,19 @@ async def commands_prefix(ctx):
     
     # Create base embed
     embed = discord.Embed(
-        title="🤖 Bot Commands",
-        description="Here are all available commands based on your permissions:",
+        title="Bot Commands",
+        description="Here are all available commands:",
         color=discord.Color.blue()
     )
     
     # Get the bot's prefixes
     prefixes = bot.command_prefix if isinstance(bot.command_prefix, list) else [bot.command_prefix]
     prefix_display = " or ".join([f"`{p}`" for p in prefixes])
-    embed.add_field(name="⌨️ Bot Prefixes", value=prefix_display, inline=False)
+    embed.add_field(name="Bot Prefixes", value=prefix_display, inline=False)
     
     # ===== PUBLIC COMMANDS (Everyone can see) =====
     public_commands = ""
-    public_commands += "**🎮 Public Commands:**\n"
+    public_commands += "**Public Commands:**\n"
     public_commands += f"• `{prefixes[0]}s` - View most recent deleted message\n"
     public_commands += f"• `{prefixes[0]}s1` - View 1st most recent deleted message\n"
     public_commands += f"• `{prefixes[0]}s2` - View 2nd most recent deleted message\n"
@@ -1121,52 +1102,27 @@ async def commands_prefix(ctx):
     public_commands += f"• `{prefixes[0]}commands` - Show this help menu\n"
     public_commands += f"• `{prefixes[0]}status` - Check bot status\n\n"
     
-    embed.add_field(name="✅ Available to Everyone", value=public_commands, inline=False)
+    embed.add_field(name="Available Commands", value=public_commands, inline=False)
     
     # ===== ADMINISTRATOR COMMANDS =====
     if has_admin:
         admin_commands = ""
-        admin_commands += "**🔒 Administrator Commands:**\n"
+        admin_commands += "**Administrator Commands:**\n"
         admin_commands += f"• `{prefixes[0]}warn @user [reason]` - Warn a user\n"
         admin_commands += f"• `{prefixes[0]}kick @user [reason]` - Kick a user\n"
         admin_commands += f"• `{prefixes[0]}ban @user [days] [reason]` - Ban a user\n"
         admin_commands += f"• `{prefixes[0]}warns @user` - View user warnings\n"
         admin_commands += f"• `{prefixes[0]}clearwarns @user` - Clear user warnings\n"
-        admin_commands += f"• `{prefixes[0]}cs` - Clear all sniped messages in channel\n\n"
+        admin_commands += f"• `{prefixes[0]}cs` - Clear all sniped messages in channel\n"
         
-        # Also show slash commands for admins
-        admin_commands += "**🎯 Slash Commands (also available):**\n"
-        admin_commands += "• `/warn`, `/kick`, `/ban`\n"
-        admin_commands += "• `/warns`, `/clearwarns`, `/cs`\n\n"
-        
-        embed.add_field(name="👑 Your Administrator Commands", value=admin_commands, inline=False)
-        
-        # Permission status
-        permission_status = "✅ **You have Administrator permission**\n"
-        permission_status += "You can use all moderation commands"
-    else:
-        locked_commands = ""
-        locked_commands += "**🔒 Administrator Commands:** *(Locked)*\n"
-        locked_commands += "You need **Administrator** permission to use these commands:\n"
-        locked_commands += "• Warn, Kick, Ban users\n"
-        locked_commands += "• View/Clear warnings\n"
-        locked_commands += "• Clear snipe storage\n"
-        
-        embed.add_field(name="🔐 Locked Commands", value=locked_commands, inline=False)
-        
-        # Permission status
-        permission_status = "⚠️ **You do not have Administrator permission**\n"
-        permission_status += "You can only use public commands"
-    
-    embed.add_field(name="🔑 Your Permission Status", value=permission_status, inline=False)
+        embed.add_field(name="Admin Commands", value=admin_commands, inline=False)
     
     # Footer with user info
-    embed.set_footer(text=f"Requested by {ctx.author.name} • User ID: {ctx.author.id}")
+    embed.set_footer(text=f"Requested by {ctx.author.name}")
     embed.timestamp = datetime.utcnow()
     
     # Send the embed
     await ctx.send(embed=embed)
-
 # ===== EXISTING BOT COMMANDS (KEEP THESE) =====
 @bot.command()
 async def status(ctx):
