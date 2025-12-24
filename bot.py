@@ -174,7 +174,7 @@ async def clear_snipes_slash(interaction: discord.Interaction):
     # Check if user has Manage Messages permission
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
-            "❌ You need **Manage Messages** permission to clear snipes!",
+            "❌ You need **Administrator** permission to clear snipes!",
             ephemeral=True
         )
         return
