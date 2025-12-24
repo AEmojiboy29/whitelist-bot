@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
+from keep_alive import keep_alive  # Import keep_alive for 24/7 hosting
 
 # Load environment variables
 load_dotenv()
@@ -18,7 +19,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'{bot.user} is online!')
     print(f'Bot ID: {bot.user.id}')
-    print('Bot is ready!')
+    print('Bot is ready and running on Render!')
 
 # Event: Monitor messages in specific channel
 @bot.event
@@ -61,15 +62,17 @@ async def on_message(message):
                            icon_url=message.author.avatar.url if message.author.avatar else None)
             await message.channel.send(f"{message.author.mention}", embed=embed)
     
-    # Process commands (still needed for basic bot functionality)
+    # Process commands
     await bot.process_commands(message)
 
 # Run the bot
 if __name__ == "__main__":
+    # Start the keep_alive server (for 24/7 uptime on free tier)
+    keep_alive()
+    
     token = os.getenv('DISCORD_TOKEN')
     if not token:
-        print("ERROR: DISCORD_TOKEN not found in .env file!")
-        print("Please create a .env file with your bot token.")
+        print("ERROR: DISCORD_TOKEN not found!")
     else:
-        print("Starting bot...")
+        print("Starting bot on Render...")
         bot.run(token)
