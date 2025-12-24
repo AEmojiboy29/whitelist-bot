@@ -1025,6 +1025,161 @@ async def clearwarns_prefix(ctx, user: discord.Member):
     
     await ctx.send(embed=embed)
 
+# ===== SEND MESSAGE COMMAND =====
+@bot.tree.command(name="sendmessage", description="Send a message to a specific channel")
+@app_commands.describe(
+    channel_id="The channel ID to send the message to",
+    message="The message to send"
+)
+async def sendmessage_slash(interaction: discord.Interaction, channel_id: str, message: str):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to send messages!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    try:
+        # Convert channel_id to integer
+        channel_id_int = int(channel_id)
+        
+        # Get the channel
+        channel = bot.get_channel(channel_id_int)
+        
+        if channel is None:
+            # Try to fetch the channel if not in cache
+            try:
+                channel = await bot.fetch_channel(channel_id_int)
+            except:
+                embed = discord.Embed(
+                    title="❌ Channel Not Found",
+                    description=f"Could not find channel with ID: `{channel_id}`",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="How to get Channel ID",
+                    value="Enable Developer Mode in Discord, right-click channel → Copy ID",
+                    inline=False
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+        
+        # Check if bot has permission to send messages in that channel
+        if not channel.permissions_for(channel.guild.me).send_messages:
+            embed = discord.Embed(
+                title="❌ Permission Error",
+                description=f"I don't have permission to send messages in {channel.mention}",
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Send the message
+        await channel.send(message)
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="✅ Message Sent",
+            description=f"Message sent to {channel.mention}",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Channel", value=channel.mention, inline=True)
+        embed.add_field(name="Channel ID", value=f"`{channel_id}`", inline=True)
+        embed.add_field(name="Message", value=message[:100] + "..." if len(message) > 100 else message, inline=False)
+        embed.set_footer(text=f"Sent by {interaction.user.name}")
+        embed.timestamp = datetime.utcnow()
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+    except ValueError:
+        embed = discord.Embed(
+            title="❌ Invalid Channel ID",
+            description=f"`{channel_id}` is not a valid channel ID. Channel IDs should be numbers only.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to send message: {str(e)}",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.command(name='sendmessage', aliases=['send', 'sm'])
+@commands.has_permissions(administrator=True)
+async def sendmessage_prefix(ctx, channel_id: str, *, message: str):
+    """Send a message to a specific channel (Administrator only)"""
+    try:
+        # Convert channel_id to integer
+        channel_id_int = int(channel_id)
+        
+        # Get the channel
+        channel = bot.get_channel(channel_id_int)
+        
+        if channel is None:
+            # Try to fetch the channel if not in cache
+            try:
+                channel = await bot.fetch_channel(channel_id_int)
+            except:
+                embed = discord.Embed(
+                    title="❌ Channel Not Found",
+                    description=f"Could not find channel with ID: `{channel_id}`",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="How to get Channel ID",
+                    value="Enable Developer Mode in Discord, right-click channel → Copy ID",
+                    inline=False
+                )
+                await ctx.send(embed=embed)
+                return
+        
+        # Check if bot has permission to send messages in that channel
+        if not channel.permissions_for(channel.guild.me).send_messages:
+            embed = discord.Embed(
+                title="❌ Permission Error",
+                description=f"I don't have permission to send messages in {channel.mention}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+        
+        # Send the message
+        await channel.send(message)
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="✅ Message Sent",
+            description=f"Message sent to {channel.mention}",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Channel", value=channel.mention, inline=True)
+        embed.add_field(name="Channel ID", value=f"`{channel_id}`", inline=True)
+        embed.add_field(name="Message", value=message[:100] + "..." if len(message) > 100 else message, inline=False)
+        embed.set_footer(text=f"Sent by {ctx.author.name}")
+        embed.timestamp = datetime.utcnow()
+        
+        await ctx.send(embed=embed)
+        
+    except ValueError:
+        embed = discord.Embed(
+            title="❌ Invalid Channel ID",
+            description=f"`{channel_id}` is not a valid channel ID. Channel IDs should be numbers only.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to send message: {str(e)}",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
 # ===== COMMANDS COMMAND (DYNAMIC PERMISSION-BASED) =====
 @bot.tree.command(name="commands", description="Show all available commands based on your permissions")
 async def commands_slash(interaction: discord.Interaction):
@@ -1062,6 +1217,7 @@ async def commands_slash(interaction: discord.Interaction):
         admin_commands += "• `/warns`, `.warns @user` - View user warnings\n"
         admin_commands += "• `/clearwarns`, `.clearwarns @user` - Clear user warnings\n"
         admin_commands += "• `/cs`, `.cs` - Clear all sniped messages in channel\n\n"
+        admin_commands += "• `/sendmessage`, `.sendmessage channel_id message` - Send message to channel\n\n"
         
         embed.add_field(name="Admin Commands", value=admin_commands, inline=False)
     
@@ -1114,6 +1270,7 @@ async def commands_prefix(ctx):
         admin_commands += f"• `{prefixes[0]}warns @user` - View user warnings\n"
         admin_commands += f"• `{prefixes[0]}clearwarns @user` - Clear user warnings\n"
         admin_commands += f"• `{prefixes[0]}cs` - Clear all sniped messages in channel\n"
+        admin_commands += f"• `{prefixes[0]}sendmessage channel_id message` - Send message to channel\n"  
         
         embed.add_field(name="Admin Commands", value=admin_commands, inline=False)
     
