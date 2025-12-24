@@ -1,5 +1,6 @@
 # Core Dependencies
 discord.py==2.3.2
+audioop-lts==0.2.2
 python-dotenv==1.0.0
 Flask==3.0.0
 
