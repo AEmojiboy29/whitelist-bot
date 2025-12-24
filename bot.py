@@ -299,39 +299,6 @@ async def s5_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 5, send_func)
 
-# ===== EXISTING BOT COMMANDS =====
-@bot.command()
-async def status(ctx):
-    """Check bot status"""
-    latency = round(bot.latency * 1000)
-    
-    embed = discord.Embed(
-        title="🤖 Bot Status",
-        description=f"Online",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
-    embed.add_field(name="Uptime", value="Running on Render", inline=True)
-    await ctx.send(embed=embed)
-
-@bot.command()
-@commands.is_owner()
-async def pingtest(ctx):
-    """Test the self-pinging system (bot owner only)"""
-    if KEEP_ALIVE_AVAILABLE:
-        try:
-            url = pinger.get_own_url()
-            import requests
-            response = requests.get(f"{url}/ping", timeout=5)
-            
-            if response.status_code == 200:
-                await ctx.send(f"✅ Self-ping successful!\nURL: {url}\nStatus: {response.status_code}")
-            else:
-                await ctx.send(f"⚠️  Ping returned status: {response.status_code}")
-        except Exception as e:
-            await ctx.send(f"❌ Ping test failed: {e}")
-    else:
-        await ctx.send("❌ Keep-alive system not available")
 
 async def main():
     """Main entry point"""
