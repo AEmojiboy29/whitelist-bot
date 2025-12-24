@@ -1,4 +1,3 @@
-
 import discord
 from discord.ext import commands
 import os
@@ -6,6 +5,7 @@ import asyncio
 import sys
 from collections import defaultdict
 from datetime import datetime
+
 # Import keep_alive with error handling
 try:
     from keep_alive import keep_alive, pinger
@@ -168,9 +168,17 @@ async def snipe_prefix(ctx):
     embed = create_snipe_embed(snipe_data)
     await ctx.send(embed=embed)
 
-# ===== CLEAR SNIPE COMMANDS =====
+# ===== CLEAR SNIPE COMMANDS (MANAGE MESSAGES PERMISSION REQUIRED) =====
 @bot.tree.command(name="cs", description="Clear all sniped messages in this channel")
 async def clear_snipes_slash(interaction: discord.Interaction):
+    # Check if user has Manage Messages permission
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message(
+            "❌ You need **Manage Messages** permission to clear snipes!",
+            ephemeral=True
+        )
+        return
+    
     channel_id = interaction.channel_id
     
     if not snipe_storage[channel_id]:
@@ -179,11 +187,12 @@ async def clear_snipes_slash(interaction: discord.Interaction):
     
     count = len(snipe_storage[channel_id])
     snipe_storage[channel_id].clear()
-    await interaction.response.send_message(f"Cleared {count} sniped message(s)!", ephemeral=True)
+    await interaction.response.send_message(f"✅ Cleared {count} sniped message(s)!", ephemeral=True)
 
 @bot.command(name='cs')
+@commands.has_permissions(manage_messages=True)  # Permission check for prefix command
 async def clear_snipes_prefix(ctx):
-    """Clear all sniped messages in this channel"""
+    """Clear all sniped messages in this channel (Manage Messages permission required)"""
     channel_id = ctx.channel.id
     
     if not snipe_storage[channel_id]:
@@ -192,10 +201,10 @@ async def clear_snipes_prefix(ctx):
     
     count = len(snipe_storage[channel_id])
     snipe_storage[channel_id].clear()
-    await ctx.send(f"Cleared {count} sniped message(s)!")
+    await ctx.send(f"✅ Cleared {count} sniped message(s)!")
 
 # ===== INDIVIDUAL SNIPE VIEWERS =====
-async def view_snipe_number(channel_id, number, send_func):
+async def view_snipe_number(channel_id, number, send_func, user_permissions=None):
     """Helper function to view a specific snipe number"""
     if not snipe_storage[channel_id]:
         await send_func("No deleted messages to snipe!")
@@ -213,7 +222,7 @@ async def view_snipe_number(channel_id, number, send_func):
     embed = create_snipe_embed(snipe_data, number)
     await send_func(embed=embed)
 
-# Prefix commands for s1-s5
+# Prefix commands for s1-s5 (anyone can use)
 @bot.command(name='s1')
 async def s1_prefix(ctx):
     """View the most recent deleted message"""
@@ -239,7 +248,7 @@ async def s5_prefix(ctx):
     """View the 5th most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 5, ctx.send)
 
-# Slash commands for s1-s5
+# Slash commands for s1-s5 (anyone can use)
 @bot.tree.command(name="s1", description="View the most recent deleted message")
 async def s1_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
