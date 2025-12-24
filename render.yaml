@@ -6,7 +6,7 @@ services:
     startCommand: python bot.py
     envVars:
       - key: DISCORD_TOKEN
-        sync: false  # You'll set this manually in Render dashboard
+        sync: false  
     plan: free
     autoDeploy: true
     healthCheckPath: /
