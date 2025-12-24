@@ -1,12 +1,58 @@
 services:
   - type: web
     name: discord-bot
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    
+    # Build Command
+    buildCommand: |
+      echo "🚀 Starting build process..."
+      python --version
+      pip install --upgrade pip
+      pip install -r requirements.txt --no-cache-dir
+      echo "✅ Dependencies installed successfully"
+    
+    # Start Command
+    startCommand: |
+      echo "🤖 Starting Discord Bot..."
+      python bot.py
+    
+    # Environment Variables
     envVars:
       - key: DISCORD_TOKEN
-        sync: false  
-    plan: free
+        sync: false
+        description: "Your Discord bot token from developer portal"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    
+    # Auto Deploy
     autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    
+    # Health Check
     healthCheckPath: /
+    healthCheckTimeout: 30
+    initialDelaySecs: 15
+    
+    # Resource Limits
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    
+    # Advanced
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    
+    # Notifications (optional)
+    # notifyOnDeploy: true
+    # slackWebhook:
+    #   from: Render
+    #   channel: deployments
