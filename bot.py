@@ -307,20 +307,11 @@ async def status(ctx):
     
     embed = discord.Embed(
         title="🤖 Bot Status",
-        description=f"Online and monitoring channel <#{1442227479182835722}>",
+        description=f"Online",
         color=discord.Color.green()
     )
     embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
     embed.add_field(name="Uptime", value="Running on Render", inline=True)
-    embed.add_field(name="Keep-alive", value="Active (5-min pings)" if KEEP_ALIVE_AVAILABLE else "Inactive", inline=True)
-    
-    if KEEP_ALIVE_AVAILABLE:
-        try:
-            url = pinger.get_own_url()
-            embed.add_field(name="Bot URL", value=f"[Visit]({url})", inline=False)
-        except:
-            pass
-    
     await ctx.send(embed=embed)
 
 @bot.command()
