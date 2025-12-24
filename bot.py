@@ -5,6 +5,7 @@ import asyncio
 import sys
 from collections import defaultdict
 from datetime import datetime
+import json
 
 # Import keep_alive with error handling
 try:
@@ -15,6 +16,68 @@ except ImportError as e:
     KEEP_ALIVE_AVAILABLE = False
     print(f"⚠️  Keep-alive not available: {e}")
 
+# ===== PERSISTENT WARNINGS STORAGE =====
+WARNINGS_FILE = "warnings.json"
+
+def load_warnings():
+    """Load warnings from JSON file"""
+    if os.path.exists(WARNINGS_FILE):
+        try:
+            with open(WARNINGS_FILE, 'r') as f:
+                data = json.load(f)
+                
+            # Convert string keys back to integers and reconstruct warning objects
+            warnings = defaultdict(list)
+            for user_id_str, warnings_list in data.items():
+                user_id = int(user_id_str)
+                for warn in warnings_list:
+                    # Reconstruct warning object
+                    warning_data = {
+                        "reason": warn["reason"],
+                        "moderator_id": warn["moderator_id"],
+                        "timestamp": datetime.fromisoformat(warn["timestamp"]),
+                        "warning_id": warn["warning_id"]
+                    }
+                    warnings[user_id].append(warning_data)
+            return warnings
+        except Exception as e:
+            print(f"⚠️  Error loading warnings: {e}")
+            return defaultdict(list)
+    return defaultdict(list)
+
+def save_warnings():
+    """Save warnings to JSON file"""
+    try:
+        # Convert warnings to JSON-serializable format
+        data = {}
+        for user_id, warnings_list in warnings_storage.items():
+            user_warnings = []
+            for warn in warnings_list:
+                # Convert moderator object to ID, handle both cases
+                moderator_id = warn["moderator"].id if hasattr(warn["moderator"], 'id') else warn.get("moderator_id", 0)
+                
+                user_warnings.append({
+                    "reason": warn["reason"],
+                    "moderator_id": moderator_id,
+                    "timestamp": warn["timestamp"].isoformat(),
+                    "warning_id": warn["warning_id"]
+                })
+            data[str(user_id)] = user_warnings
+        
+        with open(WARNINGS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f"✅ Saved warnings for {len(data)} users")
+    except Exception as e:
+        print(f"❌ Error saving warnings: {e}")
+
+def get_member_from_id(guild, member_id):
+    """Try to get member object from ID"""
+    member = guild.get_member(member_id)
+    if member:
+        return member
+    # If member not found in cache, return a placeholder
+    return type('Object', (), {'name': f'User({member_id})', 'id': member_id, 'mention': f'<@{member_id}>'})()
+
 # Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -24,7 +87,10 @@ bot = commands.Bot(command_prefix=['.', '!'], intents=intents)
 
 # ===== SNIPE STORAGE =====
 snipe_storage = defaultdict(list)
-MAX_SNIPES = 5  # Maximum number of snipes to store per channel
+MAX_SNIPES = 5
+
+# ===== WARNINGS STORAGE =====
+warnings_storage = load_warnings()  # Load from file on startup
 
 @bot.event
 async def on_ready():
@@ -35,7 +101,6 @@ async def on_ready():
     
     if KEEP_ALIVE_AVAILABLE:
         print('🌐 Keep-alive: ACTIVE (auto-pinging every 5 min)')
-        # Get URL for user reference
         try:
             url = pinger.get_own_url()
             print(f'📡 Bot URL: {url}')
@@ -45,7 +110,6 @@ async def on_ready():
         print('⚠️  Keep-alive: INACTIVE')
     
     print('🎯 Monitoring channel: 1442227479182835722')
-    print('=' * 50)
     
     # Sync slash commands
     try:
@@ -53,6 +117,23 @@ async def on_ready():
         print(f'✅ Synced {len(synced)} slash command(s)')
     except Exception as e:
         print(f'⚠️  Error syncing commands: {e}')
+    
+    # Load warnings count
+    total_warnings = sum(len(warns) for warns in warnings_storage.values())
+    print(f'📝 Loaded {total_warnings} warnings for {len(warnings_storage)} users')
+    
+    # Save warnings every 5 minutes
+    bot.loop.create_task(periodic_save())
+    
+    print('=' * 50)
+
+async def periodic_save():
+    """Save warnings to file every 5 minutes"""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        await asyncio.sleep(300)  # 5 minutes
+        save_warnings()
+        print("💾 Auto-saved warnings to file")
 
 # ===== SNIPE EVENT LISTENER =====
 @bot.event
@@ -205,7 +286,7 @@ async def clear_snipes_slash(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 @bot.command(name='cs')
-@commands.has_permissions(administrator=True)  # Fixed to match slash command
+@commands.has_permissions(administrator=True)
 async def clear_snipes_prefix(ctx):
     """Clear all sniped messages in this channel"""
     channel_id = ctx.channel.id
@@ -232,7 +313,7 @@ async def clear_snipes_prefix(ctx):
     await ctx.send(embed=embed)
 
 # ===== INDIVIDUAL SNIPE VIEWERS =====
-async def view_snipe_number(channel_id, number, send_func, user_permissions=None):
+async def view_snipe_number(channel_id, number, send_func):
     """Helper function to view a specific snipe number"""
     if not snipe_storage[channel_id]:
         await send_func("No deleted messages to snipe!")
@@ -327,6 +408,786 @@ async def s5_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 5, send_func)
 
+# ===== MODERATION COMMANDS (ADMINISTRATOR ONLY) =====
+# ===== WARN COMMAND =====
+@bot.tree.command(name="warn", description="Warn a user with a reason")
+@app_commands.describe(
+    user="The user to warn",
+    reason="Reason for the warning"
+)
+async def warn_slash(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to warn users!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot warn self
+    if user.id == interaction.user.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot warn yourself!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot warn bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot warn bots!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Add warning to storage
+    warning_data = {
+        "reason": reason,
+        "moderator": interaction.user,
+        "timestamp": datetime.utcnow(),
+        "warning_id": len(warnings_storage[user.id]) + 1
+    }
+    warnings_storage[user.id].append(warning_data)
+    save_warnings()  # Save immediately
+    
+    # Send success embed
+    embed = discord.Embed(
+        title="⚠️ User Warned",
+        description=f"{user.mention} has been warned.",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Warnings", value=f"Total: **{len(warnings_storage[user.id])}**", inline=True)
+    embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+    embed.set_footer(text=f"User ID: {user.id} • Warning #{warning_data['warning_id']}")
+    embed.timestamp = datetime.utcnow()
+    
+    await interaction.response.send_message(embed=embed)
+    
+    # Try to DM the user (optional)
+    try:
+        dm_embed = discord.Embed(
+            title="⚠️ You have been warned",
+            description=f"You received a warning in **{interaction.guild.name}**",
+            color=discord.Color.orange()
+        )
+        dm_embed.add_field(name="Reason", value=reason, inline=False)
+        dm_embed.add_field(name="Moderator", value=interaction.user.name, inline=True)
+        dm_embed.add_field(name="Total Warnings", value=str(len(warnings_storage[user.id])), inline=True)
+        dm_embed.set_footer(text="Please follow the server rules")
+        await user.send(embed=dm_embed)
+    except:
+        pass  # User has DMs disabled
+
+@bot.command(name='warn')
+@commands.has_permissions(administrator=True)
+async def warn_prefix(ctx, user: discord.Member, *, reason="No reason provided"):
+    """Warn a user with a reason (Administrator only)"""
+    # Cannot warn self
+    if user.id == ctx.author.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot warn yourself!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Cannot warn bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot warn bots!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Add warning to storage
+    warning_data = {
+        "reason": reason,
+        "moderator": ctx.author,
+        "timestamp": datetime.utcnow(),
+        "warning_id": len(warnings_storage[user.id]) + 1
+    }
+    warnings_storage[user.id].append(warning_data)
+    save_warnings()  # Save immediately
+    
+    # Send success embed
+    embed = discord.Embed(
+        title="⚠️ User Warned",
+        description=f"{user.mention} has been warned.",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.add_field(name="Warnings", value=f"Total: **{len(warnings_storage[user.id])}**", inline=True)
+    embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+    embed.set_footer(text=f"User ID: {user.id} • Warning #{warning_data['warning_id']}")
+    embed.timestamp = datetime.utcnow()
+    
+    await ctx.send(embed=embed)
+    
+    # Try to DM the user (optional)
+    try:
+        dm_embed = discord.Embed(
+            title="⚠️ You have been warned",
+            description=f"You received a warning in **{ctx.guild.name}**",
+            color=discord.Color.orange()
+        )
+        dm_embed.add_field(name="Reason", value=reason, inline=False)
+        dm_embed.add_field(name="Moderator", value=ctx.author.name, inline=True)
+        dm_embed.add_field(name="Total Warnings", value=str(len(warnings_storage[user.id])), inline=True)
+        dm_embed.set_footer(text="Please follow the server rules")
+        await user.send(embed=dm_embed)
+    except:
+        pass
+
+# ===== BAN COMMAND =====
+@bot.tree.command(name="ban", description="Ban a user from the server")
+@app_commands.describe(
+    user="The user to ban",
+    reason="Reason for the ban",
+    delete_days="Number of days of messages to delete (0-7)"
+)
+@app_commands.choices(delete_days=[
+    app_commands.Choice(name="0 days (no messages)", value=0),
+    app_commands.Choice(name="1 day", value=1),
+    app_commands.Choice(name="2 days", value=2),
+    app_commands.Choice(name="3 days", value=3),
+    app_commands.Choice(name="7 days", value=7)
+])
+async def ban_slash(interaction: discord.Interaction, user: discord.Member, 
+                   reason: str = "No reason provided", delete_days: int = 0):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to ban users!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot ban self
+    if user.id == interaction.user.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot ban yourself!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot ban bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot ban bots!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Check if target has higher permissions
+    if user.top_role >= interaction.user.top_role:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="You cannot ban someone with equal or higher permissions!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Ban the user
+    try:
+        await user.ban(reason=f"{reason} (Banned by {interaction.user})", delete_message_days=delete_days)
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="🔨 User Banned",
+            description=f"{user.mention} has been banned from the server.",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Messages Deleted", value=f"Last {delete_days} day(s)", inline=True)
+        embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+        embed.set_footer(text=f"User ID: {user.id}")
+        embed.timestamp = datetime.utcnow()
+        
+        await interaction.response.send_message(embed=embed)
+        
+    except discord.Forbidden:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="I don't have permission to ban this user!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to ban user: {str(e)}",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.command(name='ban')
+@commands.has_permissions(administrator=True)
+async def ban_prefix(ctx, user: discord.Member, delete_days: int = 0, *, reason="No reason provided"):
+    """Ban a user from the server (Administrator only)"""
+    # Cannot ban self
+    if user.id == ctx.author.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot ban yourself!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Cannot ban bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot ban bots!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Check if target has higher permissions
+    if user.top_role >= ctx.author.top_role:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="You cannot ban someone with equal or higher permissions!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Ban the user
+    try:
+        await user.ban(reason=f"{reason} (Banned by {ctx.author})", delete_message_days=delete_days)
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="🔨 User Banned",
+            description=f"{user.mention} has been banned from the server.",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Messages Deleted", value=f"Last {delete_days} day(s)", inline=True)
+        embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+        embed.set_footer(text=f"User ID: {user.id}")
+        embed.timestamp = datetime.utcnow()
+        
+        await ctx.send(embed=embed)
+        
+    except discord.Forbidden:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="I don't have permission to ban this user!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to ban user: {str(e)}",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+# ===== KICK COMMAND =====
+@bot.tree.command(name="kick", description="Kick a user from the server")
+@app_commands.describe(
+    user="The user to kick",
+    reason="Reason for the kick"
+)
+async def kick_slash(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to kick users!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot kick self
+    if user.id == interaction.user.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot kick yourself!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Cannot kick bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot kick bots!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Check if target has higher permissions
+    if user.top_role >= interaction.user.top_role:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="You cannot kick someone with equal or higher permissions!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Kick the user
+    try:
+        await user.kick(reason=f"{reason} (Kicked by {interaction.user})")
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="👢 User Kicked",
+            description=f"{user.mention} has been kicked from the server.",
+            color=discord.Color.orange()
+        )
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+        embed.set_footer(text=f"User ID: {user.id}")
+        embed.timestamp = datetime.utcnow()
+        
+        await interaction.response.send_message(embed=embed)
+        
+    except discord.Forbidden:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="I don't have permission to kick this user!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to kick user: {str(e)}",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.command(name='kick')
+@commands.has_permissions(administrator=True)
+async def kick_prefix(ctx, user: discord.Member, *, reason="No reason provided"):
+    """Kick a user from the server (Administrator only)"""
+    # Cannot kick self
+    if user.id == ctx.author.id:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot kick yourself!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Cannot kick bots
+    if user.bot:
+        embed = discord.Embed(
+            title="❌ Invalid Target",
+            description="You cannot kick bots!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Check if target has higher permissions
+    if user.top_role >= ctx.author.top_role:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="You cannot kick someone with equal or higher permissions!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Kick the user
+    try:
+        await user.kick(reason=f"{reason} (Kicked by {ctx.author})")
+        
+        # Send success embed
+        embed = discord.Embed(
+            title="👢 User Kicked",
+            description=f"{user.mention} has been kicked from the server.",
+            color=discord.Color.orange()
+        )
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+        embed.set_footer(text=f"User ID: {user.id}")
+        embed.timestamp = datetime.utcnow()
+        
+        await ctx.send(embed=embed)
+        
+    except discord.Forbidden:
+        embed = discord.Embed(
+            title="❌ Permission Error",
+            description="I don't have permission to kick this user!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+    except Exception as e:
+        embed = discord.Embed(
+            title="❌ Error",
+            description=f"Failed to kick user: {str(e)}",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+# ===== WARNS COMMAND =====
+@bot.tree.command(name="warns", description="View warnings for a user")
+@app_commands.describe(
+    user="The user to check warnings for"
+)
+async def warns_slash(interaction: discord.Interaction, user: discord.Member):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to view warnings!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    user_warnings = warnings_storage[user.id]
+    
+    if not user_warnings:
+        embed = discord.Embed(
+            title="📋 User Warnings",
+            description=f"{user.mention} has **no warnings**.",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"User ID: {user.id}")
+        await interaction.response.send_message(embed=embed)
+        return
+    
+    # Create paginated embed for warnings
+    warnings_text = ""
+    for i, warning in enumerate(user_warnings, 1):
+        # Handle moderator (could be ID or object)
+        if hasattr(warning['moderator'], 'name'):
+            moderator_name = warning['moderator'].name
+            moderator_mention = warning['moderator'].mention
+        else:
+            # Try to get member from ID
+            moderator_obj = get_member_from_id(interaction.guild, warning.get('moderator_id', 0))
+            moderator_name = moderator_obj.name
+            moderator_mention = moderator_obj.mention
+        
+        time_ago = (datetime.utcnow() - warning['timestamp']).days
+        warnings_text += f"**#{i}** - {time_ago} day(s) ago\n"
+        warnings_text += f"**Reason:** {warning['reason']}\n"
+        warnings_text += f"**By:** {moderator_mention}\n"
+        warnings_text += f"**Date:** {warning['timestamp'].strftime('%Y-%m-%d %H:%M')}\n\n"
+    
+    embed = discord.Embed(
+        title=f"⚠️ Warnings for {user.name}",
+        description=f"**Total Warnings:** {len(user_warnings)}\n\n{warnings_text}",
+        color=discord.Color.orange()
+    )
+    embed.set_thumbnail(url=user.display_avatar.url)
+    embed.set_footer(text=f"User ID: {user.id} • Requested by {interaction.user.name}")
+    
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name='warns')
+@commands.has_permissions(administrator=True)
+async def warns_prefix(ctx, user: discord.Member):
+    """View warnings for a user (Administrator only)"""
+    user_warnings = warnings_storage[user.id]
+    
+    if not user_warnings:
+        embed = discord.Embed(
+            title="📋 User Warnings",
+            description=f"{user.mention} has **no warnings**.",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"User ID: {user.id}")
+        await ctx.send(embed=embed)
+        return
+    
+    # Create paginated embed for warnings
+    warnings_text = ""
+    for i, warning in enumerate(user_warnings, 1):
+        # Handle moderator (could be ID or object)
+        if hasattr(warning['moderator'], 'name'):
+            moderator_name = warning['moderator'].name
+            moderator_mention = warning['moderator'].mention
+        else:
+            # Try to get member from ID
+            moderator_obj = get_member_from_id(ctx.guild, warning.get('moderator_id', 0))
+            moderator_name = moderator_obj.name
+            moderator_mention = moderator_obj.mention
+        
+        time_ago = (datetime.utcnow() - warning['timestamp']).days
+        warnings_text += f"**#{i}** - {time_ago} day(s) ago\n"
+        warnings_text += f"**Reason:** {warning['reason']}\n"
+        warnings_text += f"**By:** {moderator_mention}\n"
+        warnings_text += f"**Date:** {warning['timestamp'].strftime('%Y-%m-%d %H:%M')}\n\n"
+    
+    embed = discord.Embed(
+        title=f"⚠️ Warnings for {user.name}",
+        description=f"**Total Warnings:** {len(user_warnings)}\n\n{warnings_text}",
+        color=discord.Color.orange()
+    )
+    embed.set_thumbnail(url=user.display_avatar.url)
+    embed.set_footer(text=f"User ID: {user.id} • Requested by {ctx.author.name}")
+    
+    await ctx.send(embed=embed)
+
+# ===== CLEARWARNS COMMAND =====
+@bot.tree.command(name="clearwarns", description="Clear all warnings for a user")
+@app_commands.describe(
+    user="The user to clear warnings for"
+)
+async def clearwarns_slash(interaction: discord.Interaction, user: discord.Member):
+    # Check if user has Administrator permission
+    if not interaction.user.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to clear warnings!",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    user_warnings = warnings_storage[user.id]
+    
+    if not user_warnings:
+        embed = discord.Embed(
+            title="📋 Clear Warnings",
+            description=f"{user.mention} has no warnings to clear.",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    # Clear warnings
+    count = len(user_warnings)
+    warnings_storage[user.id].clear()
+    save_warnings()  # Save immediately
+    
+    embed = discord.Embed(
+        title="✅ Warnings Cleared",
+        description=f"Cleared **{count}** warning(s) for {user.mention}.",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Cleared by {interaction.user.name}")
+    embed.timestamp = datetime.utcnow()
+    
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name='clearwarns')
+@commands.has_permissions(administrator=True)
+async def clearwarns_prefix(ctx, user: discord.Member):
+    """Clear all warnings for a user (Administrator only)"""
+    user_warnings = warnings_storage[user.id]
+    
+    if not user_warnings:
+        embed = discord.Embed(
+            title="📋 Clear Warnings",
+            description=f"{user.mention} has no warnings to clear.",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Clear warnings
+    count = len(user_warnings)
+    warnings_storage[user.id].clear()
+    save_warnings()  # Save immediately
+    
+    embed = discord.Embed(
+        title="✅ Warnings Cleared",
+        description=f"Cleared **{count}** warning(s) for {user.mention}.",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Cleared by {ctx.author.name}")
+    embed.timestamp = datetime.utcnow()
+    
+    await ctx.send(embed=embed)
+
+# ===== COMMANDS COMMAND (DYNAMIC PERMISSION-BASED) =====
+@bot.tree.command(name="commands", description="Show all available commands based on your permissions")
+async def commands_slash(interaction: discord.Interaction):
+    # Check user permissions
+    has_admin = interaction.user.guild_permissions.administrator
+    
+    # Create base embed
+    embed = discord.Embed(
+        title="🤖 Bot Commands",
+        description="Here are all available commands based on your permissions:",
+        color=discord.Color.blue()
+    )
+    
+    # ===== PUBLIC COMMANDS (Everyone can see) =====
+    public_commands = ""
+    public_commands += "**🎮 Public Commands:**\n"
+    public_commands += "• `/s`, `.s` - View most recent deleted message\n"
+    public_commands += "• `/s1`, `.s1` - View 1st most recent deleted message\n"
+    public_commands += "• `/s2`, `.s2` - View 2nd most recent deleted message\n"
+    public_commands += "• `/s3`, `.s3` - View 3rd most recent deleted message\n"
+    public_commands += "• `/s4`, `.s4` - View 4th most recent deleted message\n"
+    public_commands += "• `/s5`, `.s5` - View 5th most recent deleted message\n"
+    public_commands += "• `/commands`, `.commands` - Show this help menu\n"
+    public_commands += "• `.status` - Check bot status\n\n"
+    
+    embed.add_field(name="✅ Available to Everyone", value=public_commands, inline=False)
+    
+    # ===== ADMINISTRATOR COMMANDS =====
+    if has_admin:
+        admin_commands = ""
+        admin_commands += "**🔒 Administrator Commands:**\n"
+        admin_commands += "• `/warn`, `.warn @user [reason]` - Warn a user\n"
+        admin_commands += "• `/kick`, `.kick @user [reason]` - Kick a user\n"
+        admin_commands += "• `/ban`, `.ban @user [reason] [days]` - Ban a user\n"
+        admin_commands += "• `/warns`, `.warns @user` - View user warnings\n"
+        admin_commands += "• `/clearwarns`, `.clearwarns @user` - Clear user warnings\n"
+        admin_commands += "• `/cs`, `.cs` - Clear all sniped messages in channel\n\n"
+        
+        embed.add_field(name="👑 Your Administrator Commands", value=admin_commands, inline=False)
+        
+        # Permission status
+        permission_status = "✅ **You have Administrator permission**\n"
+        permission_status += "You can use all moderation commands"
+    else:
+        locked_commands = ""
+        locked_commands += "**🔒 Administrator Commands:** *(Locked)*\n"
+        locked_commands += "You need **Administrator** permission to use these commands:\n"
+        locked_commands += "• Warn, Kick, Ban users\n"
+        locked_commands += "• View/Clear warnings\n"
+        locked_commands += "• Clear snipe storage\n"
+        
+        embed.add_field(name="🔐 Locked Commands", value=locked_commands, inline=False)
+        
+        # Permission status
+        permission_status = "⚠️ **You do not have Administrator permission**\n"
+        permission_status += "You can only use public commands"
+    
+    embed.add_field(name="🔑 Your Permission Status", value=permission_status, inline=False)
+    
+    # Footer with user info
+    embed.set_footer(text=f"Requested by {interaction.user.name} • User ID: {interaction.user.id}")
+    embed.timestamp = datetime.utcnow()
+    
+    # Send the embed
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.command(name='commands', aliases=['help', 'cmds'])
+async def commands_prefix(ctx):
+    """Show all available commands based on your permissions"""
+    # Check user permissions
+    has_admin = ctx.author.guild_permissions.administrator
+    
+    # Create base embed
+    embed = discord.Embed(
+        title="🤖 Bot Commands",
+        description="Here are all available commands based on your permissions:",
+        color=discord.Color.blue()
+    )
+    
+    # Get the bot's prefixes
+    prefixes = bot.command_prefix if isinstance(bot.command_prefix, list) else [bot.command_prefix]
+    prefix_display = " or ".join([f"`{p}`" for p in prefixes])
+    embed.add_field(name="⌨️ Bot Prefixes", value=prefix_display, inline=False)
+    
+    # ===== PUBLIC COMMANDS (Everyone can see) =====
+    public_commands = ""
+    public_commands += "**🎮 Public Commands:**\n"
+    public_commands += f"• `{prefixes[0]}s` - View most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}s1` - View 1st most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}s2` - View 2nd most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}s3` - View 3rd most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}s4` - View 4th most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}s5` - View 5th most recent deleted message\n"
+    public_commands += f"• `{prefixes[0]}commands` - Show this help menu\n"
+    public_commands += f"• `{prefixes[0]}status` - Check bot status\n\n"
+    
+    embed.add_field(name="✅ Available to Everyone", value=public_commands, inline=False)
+    
+    # ===== ADMINISTRATOR COMMANDS =====
+    if has_admin:
+        admin_commands = ""
+        admin_commands += "**🔒 Administrator Commands:**\n"
+        admin_commands += f"• `{prefixes[0]}warn @user [reason]` - Warn a user\n"
+        admin_commands += f"• `{prefixes[0]}kick @user [reason]` - Kick a user\n"
+        admin_commands += f"• `{prefixes[0]}ban @user [days] [reason]` - Ban a user\n"
+        admin_commands += f"• `{prefixes[0]}warns @user` - View user warnings\n"
+        admin_commands += f"• `{prefixes[0]}clearwarns @user` - Clear user warnings\n"
+        admin_commands += f"• `{prefixes[0]}cs` - Clear all sniped messages in channel\n\n"
+        
+        # Also show slash commands for admins
+        admin_commands += "**🎯 Slash Commands (also available):**\n"
+        admin_commands += "• `/warn`, `/kick`, `/ban`\n"
+        admin_commands += "• `/warns`, `/clearwarns`, `/cs`\n\n"
+        
+        embed.add_field(name="👑 Your Administrator Commands", value=admin_commands, inline=False)
+        
+        # Permission status
+        permission_status = "✅ **You have Administrator permission**\n"
+        permission_status += "You can use all moderation commands"
+    else:
+        locked_commands = ""
+        locked_commands += "**🔒 Administrator Commands:** *(Locked)*\n"
+        locked_commands += "You need **Administrator** permission to use these commands:\n"
+        locked_commands += "• Warn, Kick, Ban users\n"
+        locked_commands += "• View/Clear warnings\n"
+        locked_commands += "• Clear snipe storage\n"
+        
+        embed.add_field(name="🔐 Locked Commands", value=locked_commands, inline=False)
+        
+        # Permission status
+        permission_status = "⚠️ **You do not have Administrator permission**\n"
+        permission_status += "You can only use public commands"
+    
+    embed.add_field(name="🔑 Your Permission Status", value=permission_status, inline=False)
+    
+    # Footer with user info
+    embed.set_footer(text=f"Requested by {ctx.author.name} • User ID: {ctx.author.id}")
+    embed.timestamp = datetime.utcnow()
+    
+    # Send the embed
+    await ctx.send(embed=embed)
+
+# ===== EXISTING BOT COMMANDS (KEEP THESE) =====
+@bot.command()
+async def status(ctx):
+    """Check bot status"""
+    latency = round(bot.latency * 1000)
+    
+    embed = discord.Embed(
+        title="🤖 Bot Status",
+        description=f"Online and monitoring channel <#{1442227479182835722}>",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
+    embed.add_field(name="Uptime", value="Running on Render", inline=True)
+    embed.add_field(name="Keep-alive", value="Active (5-min pings)" if KEEP_ALIVE_AVAILABLE else "Inactive", inline=True)
+    
+    if KEEP_ALIVE_AVAILABLE:
+        try:
+            url = pinger.get_own_url()
+            embed.add_field(name="Bot URL", value=f"[Visit]({url})", inline=False)
+        except:
+            pass
+    
+    await ctx.send(embed=embed)
 
 async def main():
     """Main entry point"""
@@ -374,19 +1235,14 @@ async def main():
     except Exception as e:
         print(f"❌ Error: {e}")
 
-# Clean shutdown handling
-import atexit
+# Save warnings on shutdown
+def save_on_exit():
+    """Save warnings when bot shuts down"""
+    print("💾 Saving warnings before shutdown...")
+    save_warnings()
+    print("✅ Warnings saved successfully")
 
-def cleanup():
-    """Cleanup on exit"""
-    if KEEP_ALIVE_AVAILABLE:
-        try:
-            pinger.stop()
-            print("🛑 Self-pinger stopped")
-        except:
-            pass
-
-atexit.register(cleanup)
+atexit.register(save_on_exit)
 
 if __name__ == "__main__":
     asyncio.run(main())
