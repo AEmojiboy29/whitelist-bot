@@ -1089,8 +1089,8 @@ async def commands_slash(interaction: discord.Interaction):
     
     # Send the embed
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.command(name='commands', aliases=['help', 'cmds'])
+    
+@bot.command(name='commands', aliases=['cmds'])  # REMOVED 'help' from aliases
 async def commands_prefix(ctx):
     """Show all available commands based on your permissions"""
     # Check user permissions
