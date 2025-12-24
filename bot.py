@@ -172,7 +172,7 @@ async def snipe_prefix(ctx):
 @bot.tree.command(name="cs", description="Clear all sniped messages in this channel")
 async def clear_snipes_slash(interaction: discord.Interaction):
     # Check if user has Manage Messages permission
-    if not interaction.user.guild_permissions.manage_messages:
+    if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
             "❌ You need **Manage Messages** permission to clear snipes!",
             ephemeral=True
