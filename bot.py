@@ -143,7 +143,7 @@ def create_snipe_embed(snipe_data, index=None):
     return embed
 
 # ===== SNIPE COMMANDS (most recent) =====
-@bot.tree.command(name="snipe", description="View the most recently deleted message")
+@bot.tree.command(name="s", description="View the most recently deleted message")
 async def snipe_slash(interaction: discord.Interaction):
     channel_id = interaction.channel_id
     
@@ -155,7 +155,7 @@ async def snipe_slash(interaction: discord.Interaction):
     embed = create_snipe_embed(snipe_data)
     await interaction.response.send_message(embed=embed)
 
-@bot.command(name='snipe')
+@bot.command(name='s')
 async def snipe_prefix(ctx):
     """View the most recently deleted message"""
     channel_id = ctx.channel.id
@@ -213,35 +213,35 @@ async def view_snipe_number(channel_id, number, send_func):
     embed = create_snipe_embed(snipe_data, number)
     await send_func(embed=embed)
 
-# Prefix commands for cs1-cs5
-@bot.command(name='cs1')
-async def cs1_prefix(ctx):
+# Prefix commands for s1-s5
+@bot.command(name='s1')
+async def s1_prefix(ctx):
     """View the most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 1, ctx.send)
 
-@bot.command(name='cs2')
-async def cs2_prefix(ctx):
+@bot.command(name='s2')
+async def s2_prefix(ctx):
     """View the 2nd most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 2, ctx.send)
 
-@bot.command(name='cs3')
-async def cs3_prefix(ctx):
+@bot.command(name='s3')
+async def s3_prefix(ctx):
     """View the 3rd most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 3, ctx.send)
 
-@bot.command(name='cs4')
-async def cs4_prefix(ctx):
+@bot.command(name='s4')
+async def s4_prefix(ctx):
     """View the 4th most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 4, ctx.send)
 
-@bot.command(name='cs5')
-async def cs5_prefix(ctx):
+@bot.command(name='s5')
+async def s5_prefix(ctx):
     """View the 5th most recent deleted message"""
     await view_snipe_number(ctx.channel.id, 5, ctx.send)
 
-# Slash commands for cs1-cs5
-@bot.tree.command(name="cs1", description="View the most recent deleted message")
-async def cs1_slash(interaction: discord.Interaction):
+# Slash commands for s1-s5
+@bot.tree.command(name="s1", description="View the most recent deleted message")
+async def s1_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
         if isinstance(content, str):
             await interaction.response.send_message(content, ephemeral=True)
@@ -250,8 +250,8 @@ async def cs1_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 1, send_func)
 
-@bot.tree.command(name="cs2", description="View the 2nd most recent deleted message")
-async def cs2_slash(interaction: discord.Interaction):
+@bot.tree.command(name="s2", description="View the 2nd most recent deleted message")
+async def s2_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
         if isinstance(content, str):
             await interaction.response.send_message(content, ephemeral=True)
@@ -260,8 +260,8 @@ async def cs2_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 2, send_func)
 
-@bot.tree.command(name="cs3", description="View the 3rd most recent deleted message")
-async def cs3_slash(interaction: discord.Interaction):
+@bot.tree.command(name="s3", description="View the 3rd most recent deleted message")
+async def s3_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
         if isinstance(content, str):
             await interaction.response.send_message(content, ephemeral=True)
@@ -270,8 +270,8 @@ async def cs3_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 3, send_func)
 
-@bot.tree.command(name="cs4", description="View the 4th most recent deleted message")
-async def cs4_slash(interaction: discord.Interaction):
+@bot.tree.command(name="s4", description="View the 4th most recent deleted message")
+async def s4_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
         if isinstance(content, str):
             await interaction.response.send_message(content, ephemeral=True)
@@ -280,8 +280,8 @@ async def cs4_slash(interaction: discord.Interaction):
     
     await view_snipe_number(interaction.channel_id, 4, send_func)
 
-@bot.tree.command(name="cs5", description="View the 5th most recent deleted message")
-async def cs5_slash(interaction: discord.Interaction):
+@bot.tree.command(name="s5", description="View the 5th most recent deleted message")
+async def s5_slash(interaction: discord.Interaction):
     async def send_func(content=None, embed=None):
         if isinstance(content, str):
             await interaction.response.send_message(content, ephemeral=True)
