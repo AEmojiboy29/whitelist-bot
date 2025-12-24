@@ -168,40 +168,68 @@ async def snipe_prefix(ctx):
     embed = create_snipe_embed(snipe_data)
     await ctx.send(embed=embed)
 
-# ===== CLEAR SNIPE COMMANDS (MANAGE MESSAGES PERMISSION REQUIRED) =====
+# ===== CLEAR SNIPE COMMANDS WITH CLEAN EMBEDS =====
 @bot.tree.command(name="cs", description="Clear all sniped messages in this channel")
 async def clear_snipes_slash(interaction: discord.Interaction):
-    # Check if user has Manage Messages permission
+    # Check if user has Administrator permission
     if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message(
-            "❌ You need **Administrator** permission to clear snipes!",
-            ephemeral=True
+        embed = discord.Embed(
+            title="❌ Permission Denied",
+            description="You need **Administrator** permission to clear snipes!",
+            color=discord.Color.red()
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
     channel_id = interaction.channel_id
     
     if not snipe_storage[channel_id]:
-        await interaction.response.send_message("No snipes to clear!", ephemeral=True)
+        embed = discord.Embed(
+            title="📭 No Snipes",
+            description="No sniped messages to clear in this channel!",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
     count = len(snipe_storage[channel_id])
     snipe_storage[channel_id].clear()
-    await interaction.response.send_message(f"✅ Cleared {count} sniped message(s)!", ephemeral=True)
+    
+    # Success embed - clean and simple
+    embed = discord.Embed(
+        title="✅ Snipes Cleared",
+        description=f"Cleared **{count}** sniped message(s) from this channel.",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Cleared by {interaction.user.name}")
+    await interaction.response.send_message(embed=embed)
 
 @bot.command(name='cs')
-@commands.has_permissions(manage_messages=True)  # Permission check for prefix command
+@commands.has_permissions(administrator=True)  # Fixed to match slash command
 async def clear_snipes_prefix(ctx):
-    """Clear all sniped messages in this channel (Manage Messages permission required)"""
+    """Clear all sniped messages in this channel"""
     channel_id = ctx.channel.id
     
     if not snipe_storage[channel_id]:
-        await ctx.send("No snipes to clear!")
+        embed = discord.Embed(
+            title="📭 No Snipes",
+            description="No sniped messages to clear in this channel!",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
         return
     
     count = len(snipe_storage[channel_id])
     snipe_storage[channel_id].clear()
-    await ctx.send(f"✅ Cleared {count} sniped message(s)!")
+    
+    # Success embed - clean and simple
+    embed = discord.Embed(
+        title="✅ Snipes Cleared",
+        description=f"Cleared **{count}** sniped message(s) from this channel.",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Cleared by {ctx.author.name}")
+    await ctx.send(embed=embed)
 
 # ===== INDIVIDUAL SNIPE VIEWERS =====
 async def view_snipe_number(channel_id, number, send_func, user_permissions=None):
