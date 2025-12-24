@@ -10,5 +10,4 @@ waitress==3.0.1
 aiohttp==3.9.3
 asyncio==3.4.3
 
-# Render specific
-gunicorn==21.2.0  # Web server for Flask
+
