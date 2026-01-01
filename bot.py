@@ -153,7 +153,8 @@ async def script_prefix(ctx):
         "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()\n"
         "```\n"
         "**📱 MOBILE COPY**\n"
-        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`"
+        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`",
+         delete_after=60
     )
 
 
