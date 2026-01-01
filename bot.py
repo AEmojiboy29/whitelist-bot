@@ -154,9 +154,8 @@ async def script_prefix(ctx):
         "```\n"
         "**📱 MOBILE COPY**\n"
         "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`",
-         delete_after=60
     )
-
+await msg.delete(delay=60)
 
 @bot.tree.command(name="script", description="Get the Void.lua script")
 async def script_slash(interaction: discord.Interaction):
