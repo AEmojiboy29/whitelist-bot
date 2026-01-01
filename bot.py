@@ -1209,6 +1209,7 @@ async def commands_slash(interaction: discord.Interaction):
     public_commands += "• `/s4`, `.s4` - View 4th most recent deleted message\n"
     public_commands += "• `/s5`, `.s5` - View 5th most recent deleted message\n"
     public_commands += "• `/commands`, `.commands` - Show this help menu\n"
+    public_commands += "• `/script, .script - Gives the Void.lua script for pc and mobile"
 
     
     embed.add_field(name="Available Commands", value=public_commands, inline=False)
@@ -1262,6 +1263,7 @@ async def commands_prefix(ctx):
     public_commands += f"• `{prefixes[0]}s4` - View 4th most recent deleted message\n"
     public_commands += f"• `{prefixes[0]}s5` - View 5th most recent deleted message\n"
     public_commands += f"• `{prefixes[0]}commands` - Show this help menu\n"
+    public_commands += f"• `{prefixes[0]}script` - Gives the Void.lua script for pc and mobile"
 
     
     embed.add_field(name="Available Commands", value=public_commands, inline=False)
