@@ -147,15 +147,20 @@ async def periodic_save():
 # script commands
 @bot.command(name="script")
 async def script_prefix(ctx):
-    await ctx.send(
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+    
+    message = await ctx.send(
         "**🖥️ PC COPY**\n"
         "```lua\n"
         "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()\n"
         "```\n"
         "**📱 MOBILE COPY**\n"
-        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`",
+        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`"
     )
-await msg.delete(delay=60)
+    await message.delete(delay=60)
 
 @bot.tree.command(name="script", description="Get the Void.lua script")
 async def script_slash(interaction: discord.Interaction):
