@@ -143,6 +143,32 @@ async def periodic_save():
         save_warnings()
         print("💾 Auto-saved warnings to file")
 
+
+# script commands
+@bot.command(name="script")
+async def script_prefix(ctx):
+    await ctx.send(
+        "**🖥️ PC COPY**\n"
+        "```lua\n"
+        "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()\n"
+        "```\n"
+        "**📱 MOBILE COPY**\n"
+        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`"
+    )
+
+
+@bot.tree.command(name="script", description="Get the Void.lua script")
+async def script_slash(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "**🖥️ PC COPY**\n"
+        "```lua\n"
+        "loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()\n"
+        "```\n"
+        "**📱 MOBILE COPY**\n"
+        "`loadstring(game:HttpGet(\"https://raw.githubusercontent.com/VoidXZor/AuthLoader/refs/heads/main/VoidLoader\", true))()`",
+        ephemeral=True
+    )
+
 # ===== SNIPE EVENT LISTENER =====
 @bot.event
 async def on_message_delete(message):
