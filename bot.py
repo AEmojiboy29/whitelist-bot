@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from discord import Activity, ActivityType
 import os
 import asyncio
 import sys
@@ -100,7 +101,9 @@ async def on_ready():
     print(f'✅ {bot.user} is online!')
     print(f'🆔 Bot ID: {bot.user.id}')
     print(f'📊 Servers: {len(bot.guilds)}')
-    
+       await bot.change_presence(
+        activity=Activity(type=ActivityType.watching, name="Void.lua Scripting")
+    ) 
     if KEEP_ALIVE_AVAILABLE:
         print('🌐 Keep-alive: ACTIVE (auto-pinging every 5 min)')
         try:
