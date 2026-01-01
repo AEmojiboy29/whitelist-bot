@@ -102,7 +102,7 @@ async def on_ready():
     print(f'🆔 Bot ID: {bot.user.id}')
     print(f'📊 Servers: {len(bot.guilds)}')
        await bot.change_presence(
-        activity=Activity(type=ActivityType.watching, name="Void.lua Scripting")
+        activity=Activity(type=ActivityType.watching, name="Void.lua")
     ) 
     if KEEP_ALIVE_AVAILABLE:
         print('🌐 Keep-alive: ACTIVE (auto-pinging every 5 min)')
